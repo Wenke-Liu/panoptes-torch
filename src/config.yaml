@@ -1,0 +1,56 @@
+model:
+  variant: 'F1'
+  input_size: 128
+  covariate: 2
+  global_pool: 'avg'
+  dropout: 0.5
+  n_classes: 2
+  ckpt: null
+data:
+  data_root_dir: '/media/data02/TCGA/LUAD'
+  meta_data_dir: '../cptac_test/tcga_label_test.csv'
+  annotation_dir: null
+  mask_id: 'basic'
+  id_col: 'Patient_ID'
+  label_col: 'STK11.mutation.status'
+  covariate_col:
+    - 'Age'
+    - 'BMI'
+  new_split: true
+  split_level: 'Patient_ID'
+  ratio: 
+    - 0.6
+    - 0.2
+    - 0.2
+  res_factor: 
+    - 1
+    - 2
+    - 4
+  data_class: 'MultiResZarrDataset'
+dataloader:
+  batch_size: 16
+  ddp_enabled: true
+  num_gpu: 2
+  num_workers: 4
+  pin_memory: true
+trainer:
+  patience: 5
+  max_epochs: 2
+  batches_trn_epoch: 50
+  batches_val_epoch: 20
+  save_top_n: 2
+
+optim:
+  lr: 1e-4
+  warmup_epoches: 5
+  weight_decay: 0
+run:
+  name: 'test'
+  exp_dir: '../test'
+  seed: 123456
+  mode: 'train'
+  saved_ckpt: './ckpt'
+  
+  
+
+  
