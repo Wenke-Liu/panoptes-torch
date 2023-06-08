@@ -54,9 +54,6 @@ def main():
     train_module = modules.TrainModule(args)
     data_module = modules.SlidesDataModule(args)
     
-    #breakpoint()
-
-
     pl_trainer = pl.Trainer(strategy='ddp', 
                             accelerator="gpu", devices=[1,2],#devices=args.dataloader.num_gpu,
                             gradient_clip_val=1,
