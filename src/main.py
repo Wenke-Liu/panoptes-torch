@@ -19,13 +19,11 @@ def main():
     
     # prepare datasets
     annot = pd.read_csv(args.data.meta_data_dir)
-    #annot['label'] = annot['Tumor_Normal'].replace({'normal': int(0), 'tumor': int(1)})
-    #annot.set_index(args.data.id_col, inplace=True, drop=False)
-    #print(annot.head())
     tile_sizes = [args.model.input_size * res for res in args.data.res_factor]
     tile_sizes_str = f'{tile_sizes[0]}_{tile_sizes[1]}_{tile_sizes[2]}'
     all_slides = utils.get_subdirs(args.data.data_root_dir)
     slides = list(set(all_slides).intersection(annot[args.data.id_col]))
+    
     #print(slides)
     for slide in slides:    # generate tiles if not exist, this step can be done with Snakemake
         slide_dir = os.path.join(args.data.data_root_dir, slide)
