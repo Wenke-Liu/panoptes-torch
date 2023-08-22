@@ -84,7 +84,7 @@ class MultiResSlidesDataset(SlidesDataset):
             lengths.append(len(slide))
         return slides_dict, lengths
     
-    def get_tile_idx(self):
+    def get_tile_idx(self, subset=None):
         """
         return a combined array of all tile_pos for each slide.
         """
@@ -98,4 +98,7 @@ class MultiResSlidesDataset(SlidesDataset):
             idx = pd.DataFrame(idx)
             slides_idx.append(idx)
         slides_idx = pd.concat(slides_idx)
+        if subset is not None:
+            slides_idx = slides_idx.iloc[:150]
+
         return slides_idx

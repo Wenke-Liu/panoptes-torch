@@ -24,10 +24,12 @@ class TrainModule(base.BaseTrainModule):
         self.criterion = nn.CrossEntropyLoss()
         self.accuracy_fun = torchmetrics.Accuracy(task='binary')
         self.roc_fun = torchmetrics.AUROC(task='binary')
+        self.batch_size = args.dataloader.batch_size
     
     def get_model(self, args):
         ModelClass = getattr(panoptes, 'PANOPTES')
         model = ModelClass(**args.model)
+        utils.model_init(model)
         return model
     
     def calculate_metrics(self, logits, labels, loss):
@@ -37,9 +39,9 @@ class TrainModule(base.BaseTrainModule):
         #fpr, tpr, threshoulds = self.roc_fun(probs, labels, task='binary')
         #auc = torchmetrics.functional.auc(fpr, tpr)
         auc = self.roc_fun(probs, labels)
-        metrics = {'loss': loss,
-                   'accuracy': accuracy,
-                   'auc': auc}
+        metrics = {'loss': loss.detach().cpu(),
+                   'accuracy': accuracy.detach().cpu(),
+                   'auc': auc.detach().cpu()}
         return metrics
     
     def shared_eval_step(self, batch, batch_idx):
@@ -47,16 +49,19 @@ class TrainModule(base.BaseTrainModule):
 
         inputs = images, covariates
         #labels = labels.int()
-        
+
         _, logits = self(inputs)
+        #print(logits)
         #criterion = nn.CrossEntropyLoss()
         
+        logits = logits.detach().cpu()
+        labels = labels.detach().cpu()
         # Loss and metrics
         loss = self.criterion(logits, labels)
         metrics = self.calculate_metrics(logits, labels, loss)
 
         # Logging additional metrics
-        metrics['outputs'] = logits
+        metrics['logits'] = logits
         metrics['labels'] = labels
         return metrics
     
@@ -64,10 +69,9 @@ class TrainModule(base.BaseTrainModule):
         images, labels, covariates, slide_ids = batch
         inputs = images, covariates
         latents, logits = self(inputs)
-        probs = nn.Softmax(dim=1)(logits)[:,1]
-        output_dict = {'latents': latents,
-                       'probs': probs,
-                       'labels': labels,
+        output_dict = {'latents': latents.detach().cpu(),
+                       'probs': nn.Softmax(dim=1)(logits)[:,1].cpu(),
+                       'labels': labels.detach().cpu(),
                        'slide_ids': slide_ids}
         return output_dict
     
@@ -75,19 +79,27 @@ class TrainModule(base.BaseTrainModule):
         images, labels, covariates, slide_ids = batch
 
         inputs = images, covariates
-        #labels = labels.int()
-        
+        #print(labels)
         _, logits = self(inputs)
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(logits, labels)
+        loss = self.criterion(logits, labels)
         metrics = self.calculate_metrics(logits, labels, loss)
         self.training_step_outputs.append(metrics)
 
         logging_metrics = {}
         for name, metric in metrics.items():
             logging_metrics[f'train_step_{name}'] = metric
-        self.log_dict(logging_metrics, batch_size = inputs[1].shape[0], prog_bar=True, sync_dist=True)
+        self.log_dict(logging_metrics, batch_size = self.batch_size, prog_bar=True, sync_dist=True)
         return loss
+    
+    def validation_step(self, batch, batch_idx):
+        metrics = self.shared_eval_step(batch, batch_idx)
+        self.validation_step_outputs.append(metrics)
+        logging_metrics = {}
+        for name, metric in metrics.items():
+            if name in ['loss', 'accuracy', 'auc']:
+                logging_metrics[f'val_step_{name}'] = metric      
+        self.log_dict(logging_metrics, batch_size= self.batch_size, prog_bar=False, sync_dist=True)
+        return metrics
     
     def predict_step(self, batch, batch_idx):
         self.predict_step_outputs.append(self.shared_inference_step(batch, batch_idx))
@@ -97,14 +109,16 @@ class TrainModule(base.BaseTrainModule):
     
     # Collect epoch statistics
     def shared_epoch_end(self, step_outputs):
-        metrics = {}
+        step_metrics = {}
         for name in step_outputs[0].keys():
-            if name in ['loss', 'accuracy', 'auc']:
-                metrics[name] = torch.stack([x[name] for x in step_outputs]).mean()
-            elif name in ['outputs', 'labels']:
-                metrics[name] = torch.cat([x[name] for x in step_outputs], dim = 0)
-            else:
+            if name == 'loss':
+                step_metrics[name] = torch.stack([x[name] for x in step_outputs]).nanmean()
+            elif name in ['logits', 'labels']:
+                step_metrics[name] = torch.cat([x[name] for x in step_outputs], dim = 0)
+            elif name not in ['accuracy', 'auc']:
                 raise ValueError(f'Unknown metric {name}')
+        
+        metrics = self.calculate_metrics(step_metrics['logits'], step_metrics['labels'], step_metrics['loss'])
         return metrics
     
     def on_training_epoch_end(self):
@@ -118,12 +132,8 @@ class TrainModule(base.BaseTrainModule):
     def on_validation_epoch_end(self):
         metrics = self.shared_epoch_end(self.validation_step_outputs)
         logging_metrics = {}
-        output_dict = {}
         for name, metric in metrics.items():
-            if name in ['outputs', 'labels']: # Exclude logging actual data
-                output_dict[name] = metric
-            else:
-                logging_metrics[f'val_epoch_{name}'] = metric
+            logging_metrics[f'val_epoch_{name}'] = metric
         self.log_dict(logging_metrics, prog_bar=True, sync_dist=True)
         self.validation_step_outputs.clear()
     
@@ -179,7 +189,7 @@ class TrainModule(base.BaseTrainModule):
             else:
                 stacked_outputs[name] = np.concatenate([x[name] for x in self.predict_step_outputs]) 
         return stacked_outputs
-
+    
     
 class SlidesDataModule(base.BaseDataModule):
     def __init__(self, args):

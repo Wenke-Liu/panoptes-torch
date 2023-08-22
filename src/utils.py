@@ -3,6 +3,7 @@ import math
 import importlib
 import numpy as np
 import pandas as pd
+import torch.nn as nn
 
 
 def import_with_str(module_name, object_name):
@@ -98,3 +99,16 @@ def data_split(df,
         return trn, val, tst
 
     
+def model_init(model):
+    # He initialization for weights
+    for name, param in model.named_parameters():
+        if name.endswith(".bias"):
+            param.data.fill_(0)
+        elif name.endswith(".weights"):
+            std = math.sqrt(param.shape[1])
+            param.data.normal_(mean=0.0, std=std)
+    # initialize the batch norm moving average
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm2d):  # or nn.BatchNorm1d, nn.BatchNorm3d
+            module.running_var.fill_(1)
+            module.running_mean.fill_(0)

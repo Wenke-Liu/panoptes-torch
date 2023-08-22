@@ -52,21 +52,36 @@ def main():
     train_module = modules.TrainModule(args)
     data_module = modules.SlidesDataModule(args)
     
+    """
+    for name, module in train_module.model.named_modules():
+        if isinstance(module, torch.nn.BatchNorm2d):  # or BatchNorm1d, BatchNorm3d
+            print(name, "Batch mean:", module.running_mean)
+            print(name, "Batch variance:", module.running_var)
+    """
+    
     pl_trainer = pl.Trainer(strategy='ddp', 
-                            accelerator="gpu", devices=[1,2],#devices=args.dataloader.num_gpu,
-                            gradient_clip_val=1,
+                            accelerator="gpu", devices=args.dataloader.num_gpu,
+                            #gradient_clip_val=1,#gradient_clip_algorithm="value",
                             logger = all_loggers,
                             callbacks = call_backs,
                             max_epochs = args.trainer.max_epochs,
                             limit_train_batches = args.trainer.batches_trn_epoch,
                             limit_val_batches = args.trainer.batches_val_epoch,
-                            fast_dev_run=20
+                            #limit_test_batches = args.trainer.batches_val_epoch
+                            #fast_dev_run=20
                             )
     
-    pl_trainer.fit(train_module, datamodule=data_module)
+
+    pl_trainer.fit(train_module, data_module)
     
     #breakpoint()
-    pl_trainer.test(train_module, datamodule=data_module)
+    """
+    testing
+    """
+    args.dataloader.ddp_enabled = False
+    data_module.args = args
+    pl_test = pl.Trainer(accelerator="gpu", devices=1) # disable ddp and distributed sampler
+    pl_test.test(train_module, data_module)
 
     test_res = train_module.test_step_outputs
     
@@ -78,9 +93,11 @@ def main():
 
     out = {k: value for k, value in test_res.items() if k in ['probs', 'labels', 'slide_ids']}
     out = pd.DataFrame(out)
-    
+    print(out.head())
+
     tile_idx = data_module.datasets['test'].get_tile_idx()
-    out = out.merge(tile_idx, how='inner')
+    tile_idx = tile_idx.reset_index(drop=True)
+    out = pd.concat([tile_idx, out], axis=1)
     out.to_csv(f'{args.run.exp_dir}/pred/tile_level_predictions.csv', index=False)
     
     #breakpoint()
@@ -95,7 +112,7 @@ def init_training(args):
     early_stop_callback = callbacks.EarlyStopping(monitor='val_epoch_loss', 
                                         min_delta=0.00, 
                                         patience=args.trainer.patience,
-                                        verbose=False,
+                                        verbose=True,
                                         mode="min")
     # Checkpoints
     checkpoint_callback = callbacks.ModelCheckpoint(dirpath=f'{args.run.exp_dir}/models',
@@ -108,7 +125,7 @@ def init_training(args):
     # Logger
     csv_logger = pl.loggers.CSVLogger(save_dir = f'{args.run.exp_dir}/csv')
 
-    call_backs = [early_stop_callback, checkpoint_callback, lr_monitor]
+    call_backs = [early_stop_callback, checkpoint_callback, lr_monitor]  
 
     return csv_logger, call_backs
 

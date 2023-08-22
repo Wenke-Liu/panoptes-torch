@@ -79,6 +79,9 @@ class BaseDataModule(pl.LightningDataModule):
             shuffle = True
         else: # test or predict settings
             shuffle = False
+            if self.args.run.debug:
+                size = 150
+                dataset = torch.utils.data.Subset(dataset, range(size))     
         
         if self.args.dataloader.ddp_enabled:
             gpus = self.args.dataloader.num_gpu

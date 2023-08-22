@@ -1,7 +1,7 @@
 model:
-  variant: 'F1'
+  variant: 'X1'
   input_size: 128
-  covariate: 2
+  covariate: null
   global_pool: 'avg'
   dropout: 0.5
   n_classes: 2
@@ -13,14 +13,14 @@ data:
   mask_id: 'basic'
   id_col: 'Patient_ID'
   label_col: 'STK11.mutation.status'
-  covariate_col:
-    - 'Age'
-    - 'BMI'
+  covariate_col: null
+  #  - 'Age'
+  #  - 'BMI'
   new_split: true
   split_level: 'Patient_ID'
   ratio: 
-    - 0.6
-    - 0.2
+    - 0.7
+    - 0.1
     - 0.2
   res_factor: 
     - 1
@@ -35,9 +35,9 @@ dataloader:
   pin_memory: true
 trainer:
   patience: 5
-  max_epochs: 2
-  batches_trn_epoch: 50
-  batches_val_epoch: 20
+  max_epochs: 20
+  batches_trn_epoch: 10000
+  batches_val_epoch: 2000
   save_top_n: 2
 
 optim:
@@ -46,6 +46,7 @@ optim:
   weight_decay: 0
 run:
   name: 'test'
+  debug: false
   exp_dir: '../test'
   seed: 123456
   mode: 'train'

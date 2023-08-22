@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import numpy as np
 import pandas as pd
 import os
-
+from model.cnn import CNNEncoder
 
 class PANOPTES(nn.Module):
     def __init__(self,
@@ -44,11 +44,14 @@ class PANOPTES(nn.Module):
         """
         Branch backbone output size: 
         inception_resnet_v2: N x 1536 x 8 x 8 for input 3 x 299 x 299
+        self.branch_a = CNNEncoder()
+        self.branch_b = CNNEncoder()
+        self.branch_c = CNNEncoder()
         """
         self.branch_a = timm.create_model(self.base_model_name, num_classes=0, global_pool='')    # branch backbone
         self.branch_b = timm.create_model(self.base_model_name, num_classes=0, global_pool='')
         self.branch_c = timm.create_model(self.base_model_name, num_classes=0, global_pool='')
-
+        
         if self.feature_pool:
             self.feature_pool_layer = nn.LazyConv2d(out_channels=4608, kernel_size=1)
         else:
