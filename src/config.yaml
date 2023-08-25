@@ -36,8 +36,8 @@ dataloader:
 trainer:
   patience: 5
   max_epochs: 20
-  batches_trn_epoch: 10000
-  batches_val_epoch: 2000
+  batches_trn_epoch: 2000
+  batches_val_epoch: 200
   save_top_n: 2
 
 optim:

@@ -82,12 +82,16 @@ class TrainModule(base.BaseTrainModule):
         #print(labels)
         _, logits = self(inputs)
         loss = self.criterion(logits, labels)
-        metrics = self.calculate_metrics(logits, labels, loss)
+
+        metrics = self.calculate_metrics(logits.detach().cpu(), labels.detach().cpu(), loss.detach().cpu())
+        metrics['logits'] = logits.detach().cpu()
+        metrics['labels'] = labels.detach().cpu()
         self.training_step_outputs.append(metrics)
 
         logging_metrics = {}
         for name, metric in metrics.items():
-            logging_metrics[f'train_step_{name}'] = metric
+            if name in ['loss', 'accuracy', 'auc']:
+                logging_metrics[f'train_step_{name}'] = metric
         self.log_dict(logging_metrics, batch_size = self.batch_size, prog_bar=True, sync_dist=True)
         return loss
     
@@ -110,6 +114,7 @@ class TrainModule(base.BaseTrainModule):
     # Collect epoch statistics
     def shared_epoch_end(self, step_outputs):
         step_metrics = {}
+        print(step_outputs[0].keys())
         for name in step_outputs[0].keys():
             if name == 'loss':
                 step_metrics[name] = torch.stack([x[name] for x in step_outputs]).nanmean()
@@ -121,12 +126,12 @@ class TrainModule(base.BaseTrainModule):
         metrics = self.calculate_metrics(step_metrics['logits'], step_metrics['labels'], step_metrics['loss'])
         return metrics
     
-    def on_training_epoch_end(self):
+    def on_train_epoch_end(self):
         metrics = self.shared_epoch_end(self.training_step_outputs)
         logging_metrics = {}
         for name, metric in metrics.items():
             logging_metrics[f'train_epoch_{name}'] = metric
-        self.log_dict(logging_metrics, prog_bar=True, sync_dist=True)
+        self.log_dict(logging_metrics, prog_bar=False, sync_dist=True)
         self.training_step_outputs.clear()
     
     def on_validation_epoch_end(self):
