@@ -1,0 +1,73 @@
+model:
+  variant: 'X1'
+  input_size: 299
+  covariate: null
+  global_pool: 'avg'
+  dropout: 0.7
+  n_classes: 2
+  ckpt: null
+
+data:
+  data_root_dir: '/gpfs/scratch/liuw09/panoptes_torch/data/ucec-svs'
+  meta_data_dir: null #'/gpfs/scratch/liuw09/panoptes_torch/labels/svs_ucec_tumor_slide_labels.csv'
+  annotation_dir: '/gpfs/scratch/liuw09/panoptes_torch/labels/nl5_serous_split.csv'
+  mask_id: 'basic'
+  id_col: 'Slide_ID'
+  label_col: 'Serous'
+  covariate_col: null
+  #  - 'Age'
+  #  - 'BMI'
+  new_split: false
+  split_level: 'Patient_ID'
+  ratio: 
+    - 0.8
+    - 0.1
+    - 0.1
+  mpp: 1.0
+  res_factor: 
+    - 1
+    - 2
+    - 4
+  data_class: 'MultiResSVSDataset'
+  slide_format: 'slide.svs'
+  val_sample_size: 500  
+
+dataloader:
+  batch_size: 32
+  ddp_enabled: true
+  num_gpu: 4
+  num_workers: 16
+  pin_memory: true
+  prefetch_factor: 2
+
+trainer:
+  data_augmentation: true
+  early_stop_start_epoch: 6
+  patience: 2
+  min_epochs: 10
+  max_epochs: 30
+  batches_trn_epoch: 5000
+  batches_val_epoch: 1.0    # use all samples in sampled validation set
+  save_top_n: 3
+  grad_batches: 2
+  pos_weight: 1.5
+
+optim:
+  lr: 1e-5
+  warmup_epochs: 2
+  warmup_start_lr: 1e-5
+  weight_decay: 0.01
+
+test:
+  trained_ckpt: 'best'
+
+run:
+  debug: null
+  exp_dir: '../results/241222'
+  seed: 241208
+  mode: 'train'
+  saved_ckpt: null
+  
+  
+
+  

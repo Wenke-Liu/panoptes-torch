@@ -54,20 +54,22 @@ class MultiResSlidesDataset(SlidesDataset):
        Multi-resolution
        Get slide_ids directly from arg
     """
-    def __init__(self, slides_root_path, tile_size, res_factor, mask_id, transform, dataset_class, label, covariate, slide_ids):
+    def __init__(self, slides_root_path, tile_size, mask_id, transform, dataset_class, label, covariate, slide_ids, mpp, slide_sample_size=None):
         self.slides_root_path = slides_root_path
         self.tile_size = tile_size
         self.mask_id = mask_id
         self.transform = transform
-        self.res_factor = res_factor
         self.label = label
         self.covariate = covariate
-
+        self.mpp = mpp
+        self.slide_sample_size = slide_sample_size
         # Get slides with covariate
         self.slides_dict, self.lengths = self.get_slides(slide_ids, dataset_class)
+        assert len(self.slides_dict) == len(self.lengths), 'Number of slides and tile counts not matched!'
     
     def get_slides(self, slide_ids, dataset_class):
         from tqdm import tqdm
+        import torch.utils.data as data
         slides_dict = {}
         lengths = []
         print('Loading slides...')
@@ -79,18 +81,28 @@ class MultiResSlidesDataset(SlidesDataset):
                 slide_covariate = self.covariate.loc[slide_id].to_numpy()    # slide level covariate 
             else:
                 slide_covariate = None
-            slide = dataset_class(slide_path, self.tile_size, self.res_factor, self.mask_id, self.transform, slide_label, slide_covariate, slide_id)
-            slides_dict[slide_id] = slide
-            lengths.append(len(slide))
+            slide = dataset_class(slide_path, self.tile_size, self.res_factor, self.mask_id, self.transform, slide_label, slide_covariate, slide_id, self.mpp)
+            if len(slide) > 0:
+                if self.slide_sample_size is not None:
+                    perm = torch.randperm(len(slide))[:min(self.slide_sample_size, len(slide))]
+                    slide = data.Subset(slide, perm.tolist())
+                lengths.append(len(slide))
+                slides_dict[slide_id] = slide
+            else:
+                print(f'{slide_id} has no usable tiles.')
         return slides_dict, lengths
     
-    def get_tile_idx(self, subset=None):
+    def get_tile_idx(self):
         """
         return a combined array of all tile_pos for each slide.
         """
         slides_idx = []
         for slide_id, slide in self.slides_dict.items():
-            tile_pos = slide.tile_pos
+            if isinstance(slide, data.Subset):
+                # Use indices to get the correct tile positions
+                tile_pos = slide.dataset.tile_pos[slide.indices]
+            else:
+                tile_pos = slide.tile_pos
             idx = {'slide_ids': slide_id}
             for i in range(3):
                 idx[f'x_{i}'] = tile_pos[:, 0 + i*2]
@@ -98,7 +110,5 @@ class MultiResSlidesDataset(SlidesDataset):
             idx = pd.DataFrame(idx)
             slides_idx.append(idx)
         slides_idx = pd.concat(slides_idx)
-        if subset is not None:
-            slides_idx = slides_idx.iloc[:150]
 
         return slides_idx

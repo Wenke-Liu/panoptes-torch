@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import numpy as np
 import pandas as pd
 import os
+import re
 from model.cnn import CNNEncoder
 
 class PANOPTES(nn.Module):
@@ -31,6 +32,7 @@ class PANOPTES(nn.Module):
         if self.variant.endswith(('1', '2')):
             self.feature_pool = False
         else:
+            print('Feature pooling before final Dense layer.')
             self.feature_pool = True
         
         self.build_model() 
@@ -38,7 +40,14 @@ class PANOPTES(nn.Module):
         if ckpt is not None:
             print(f'Loading weights from checkpoint {ckpt}.')
             checkpoint = torch.load(ckpt)
-            self.load_state_dict(checkpoint['model_state_dict'])
+            saved_state_dict = checkpoint['state_dict']
+            new_dict = {}
+            for key, value in saved_state_dict.items():
+                new_key = re.sub('model.', "", key)
+                new_dict[new_key] = saved_state_dict[key]
+            del saved_state_dict
+            saved_state_dict = new_dict
+            self.load_state_dict(saved_state_dict)
 
     def build_model(self):
         """
@@ -53,7 +62,7 @@ class PANOPTES(nn.Module):
         self.branch_c = timm.create_model(self.base_model_name, num_classes=0, global_pool='')
         
         if self.feature_pool:
-            self.feature_pool_layer = nn.LazyConv2d(out_channels=4608, kernel_size=1)
+            self.feature_pool_layer = nn.Conv2d(in_channels=4608, out_channels=4608, kernel_size=1)
         else:
             self.feature_pool_layer = nn.Identity()
 
@@ -62,11 +71,18 @@ class PANOPTES(nn.Module):
         else:    # global pool with avg by default
             self.global_pool_layer = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten())
         
+        if self.n_classes == 2:
+            out_dim = 1
+        else:
+            out_dim = self.n_classes
         if self.covariate is not None:
-            self.cov_fc = nn.Sequential(nn.LazyLinear(2), nn.ReLU())
+            self.cov_fc = nn.Sequential(nn.Linear(self.covariate, 2), nn.ReLU())
+            self.fc = nn.Linear(4610, out_dim)
+        else:
+            self.fc = nn.Linear(4608, out_dim)
         
         self.dropout_layer = nn.Dropout(self.dropout)
-        self.fc = nn.LazyLinear(2)
+        
          
     def forward(self, input):
         
@@ -87,6 +103,9 @@ class PANOPTES(nn.Module):
             latent = img_x
 
         out = self.fc(latent)
+        out = torch.squeeze(out)
+        if out.ndim == 0:
+            out = out.unsqueeze(0)
         return img_x, out
     
 

@@ -9,10 +9,10 @@ model:
 
 data:
   data_root_dir: '../data'
-  meta_data_dir: '../labels/ucec_cptac_tcga_slide_labels.csv'
+  meta_data_dir: '../labels/ucec_slide_labels_serous.csv'
   annotation_dir: null
   mask_id: 'basic'
-  id_col: 'SpecimenIdentifier'
+  id_col: 'SlideID'
   label_col: 'Serous'
   covariate_col: null
   #  - 'Age'
@@ -29,13 +29,15 @@ data:
     - 2
     - 4
   data_class: 'MultiResDicomDataset'
+  slide_format: 'slide'
 
 dataloader:
   batch_size: 32
   ddp_enabled: true
-  num_gpu: 4
-  num_workers: 16
+  num_gpu: 2
+  num_workers: 8
   pin_memory: true
+  prefetch_factor: 2
 
 trainer:
   patience: 5
@@ -47,15 +49,15 @@ trainer:
 
 optim:
   lr: 1e-4
-  warmup_epoches: 5
+  warmup_epochs: 5
   warmup_start_lr: 1e-5
   weight_decay: 0.01
 
 run:
   name: 'test'
   debug: null
-  exp_dir: '../results/test'
-  seed: 123456
+  exp_dir: '../results/241204'
+  seed: 241204
   mode: 'train'
   saved_ckpt: null
   
